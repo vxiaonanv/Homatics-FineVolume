@@ -28,6 +28,18 @@ public class VolumeKeyService extends AccessibilityService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable hide = this::hideOverlay;
     private SharedPreferences prefs;
+    private final SharedPreferences.OnSharedPreferenceChangeListener preferenceListener = (shared, key) -> {
+        if ("enabled".equals(key)) syncEnabledState();
+    };
+
+    private void syncEnabledState() {
+        if (gain == null || !gain.isAvailable() || prefs == null) return;
+        if (prefs.getBoolean("enabled", false)) {
+            gain.setPercent(prefs.getInt("fine_percent", 100));
+        } else {
+            gain.setPercent(100); // Never leave audio attenuated when disabled.
+        }
+    }
 
     @Override public void onServiceConnected() {
         super.onServiceConnected();
@@ -35,9 +47,8 @@ public class VolumeKeyService extends AccessibilityService {
         audio = (AudioManager) getSystemService(AUDIO_SERVICE);
         windows = (WindowManager) getSystemService(WINDOW_SERVICE);
         gain = new FineGainController(this);
-        if (gain.isAvailable()) {
-            gain.setPercent(prefs.getInt("fine_percent", 100));
-        }
+        prefs.registerOnSharedPreferenceChangeListener(preferenceListener);
+        syncEnabledState();
         prefs.edit().putBoolean("dsp_supported", gain.isAvailable()).apply();
     }
 
@@ -141,7 +152,11 @@ public class VolumeKeyService extends AccessibilityService {
 
     @Override public void onDestroy() {
         hideOverlay();
-        if (gain != null) gain.release();
+        if (prefs != null) prefs.unregisterOnSharedPreferenceChangeListener(preferenceListener);
+        if (gain != null) {
+            if (gain.isAvailable()) gain.setPercent(100);
+            gain.release();
+        }
         super.onDestroy();
     }
 }
