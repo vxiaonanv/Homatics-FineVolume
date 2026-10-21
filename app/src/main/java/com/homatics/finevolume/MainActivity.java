@@ -1,35 +1,24 @@
 package com.homatics.finevolume;
-import android.app.Activity;
-import android.os.Bundle;
-import android.media.AudioManager;
-import android.content.Context;
-import android.content.Intent;
-import android.content.SharedPreferences;
-import android.provider.Settings;
-import android.view.KeyEvent;
-import android.view.View;
-import android.widget.*;
-public class MainActivity extends Activity {
- AudioManager audio; SharedPreferences prefs; LinearLayout root; TextView status;
- String[] durations={"1 秒","2 秒","3 秒","5 秒"}; String[] positions={"右侧居中","左侧居中","顶部居中"};
- @Override public void onCreate(Bundle state){super.onCreate(state);audio=(AudioManager)getSystemService(Context.AUDIO_SERVICE);prefs=getSharedPreferences("finevolume",MODE_PRIVATE);render();}
- TextView label(String s,int size){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(0xfff1f5f9);t.setPadding(10,12,10,12);return t;}
- void button(String name,Runnable r){Button b=new Button(this);b.setText(name);b.setAllCaps(false);root.addView(b,new LinearLayout.LayoutParams(-1,-2));b.setOnClickListener(v->r.run());}
- void refresh(){int min=android.os.Build.VERSION.SDK_INT>=28?audio.getStreamMinVolume(AudioManager.STREAM_MUSIC):0;int max=audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);int cur=audio.getStreamVolume(AudioManager.STREAM_MUSIC);status.setText("媒体流音量："+cur+" / "+max+"（最小 "+min+"）\n当前设备系统提供 "+(max-min+1)+" 个整数音量值。\n注意：此处不是独立的 100 级 DSP 音量。");}
- void render(){ScrollView scroll=new ScrollView(this);root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(34,25,34,30);root.setBackgroundColor(0xff111827);scroll.addView(root);setContentView(scroll);
- root.addView(label("Homatics FineVolume 1.0",26));root.addView(label("兼容性检测版 · 不修改系统 · 不需要 Root",16));status=label("",17);root.addView(status);refresh();
- button("检测当前系统音量",this::refresh);
- button("音量 -（系统原生一级）",()->{audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,AudioManager.ADJUST_LOWER,0);refresh();});
- button("音量 +（系统原生一级）",()->{audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,AudioManager.ADJUST_RAISE,0);refresh();});
- root.addView(label("悬浮条规划参数（保存设置，不会假装已经接管系统音量键）",17));
- Spinner duration=new Spinner(this);duration.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,durations));duration.setSelection(prefs.getInt("duration",1));root.addView(duration);
- duration.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?> p){} public void onItemSelected(AdapterView<?> p,View v,int pos,long id){prefs.edit().putInt("duration",pos).apply();}});
- Spinner position=new Spinner(this);position.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,positions));position.setSelection(prefs.getInt("position",0));root.addView(position);
- position.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?> p){} public void onItemSelected(AdapterView<?> p,View v,int pos,long id){prefs.edit().putInt("position",pos).apply();}});
- Switch boot=new Switch(this);boot.setText("开机自启动（预留，尚未启用）");boot.setTextColor(0xfff1f5f9);boot.setChecked(false);boot.setEnabled(false);root.addView(boot);
- button("打开 HDMI-CEC / 显示声音设置",()->{try{startActivity(new Intent("android.settings.HDMI_CONTROL_SETTINGS"));}catch(Exception e){try{startActivity(new Intent(Settings.ACTION_SOUND_SETTINGS));}catch(Exception e2){Toast.makeText(this,"固件未开放该设置入口",Toast.LENGTH_LONG).show();}}});
- button("清除本应用保存的设置",()->{prefs.edit().clear().apply();render();Toast.makeText(this,"已清除应用设置；未修改系统配置",Toast.LENGTH_SHORT).show();});
- root.addView(label("检测版限制：无法保证全局拦截遥控器音量键、隐藏系统音量条或真正提供 100 级音频增益。必须在实体设备上验证后再开发这些能力。",14));
- }
- @Override public boolean onKeyDown(int keyCode,KeyEvent event){if(keyCode==KeyEvent.KEYCODE_VOLUME_UP||keyCode==KeyEvent.KEYCODE_VOLUME_DOWN){audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,keyCode==KeyEvent.KEYCODE_VOLUME_UP?AudioManager.ADJUST_RAISE:AudioManager.ADJUST_LOWER,0);refresh();return true;}return super.onKeyDown(keyCode,event);}
+import android.app.*;import android.os.*;import android.content.*;import android.media.AudioManager;import android.provider.Settings;import android.graphics.Typeface;import android.graphics.drawable.GradientDrawable;import android.view.*;import android.widget.*;
+public class MainActivity extends Activity{
+ AudioManager audio;android.content.SharedPreferences pref;LinearLayout root;TextView state,volume;int white=0xfff5f8ff,muted=0xffa8bad0;
+ int d(int x){return (int)(x*getResources().getDisplayMetrics().density+.5f);}
+ GradientDrawable bg(int color){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(d(17));return g;}
+ TextView txt(String s,int size,int color){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);return t;}
+ void gap(LinearLayout p,int h){View v=new View(this);p.addView(v,new LinearLayout.LayoutParams(1,d(h)));}
+ LinearLayout panel(String title){LinearLayout c=new LinearLayout(this);c.setOrientation(1);c.setPadding(d(24),d(20),d(24),d(20));c.setBackground(bg(0xff1c2a40));root.addView(c,new LinearLayout.LayoutParams(-1,-2));TextView h=txt(title,21,white);h.setTypeface(null,Typeface.BOLD);c.addView(h);gap(root,14);return c;}
+ void action(LinearLayout p,String name,Runnable run){Button b=new Button(this);b.setText(name);b.setAllCaps(false);b.setTextColor(white);b.setTextSize(16);b.setBackground(bg(0xff29476a));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,d(55));lp.topMargin=d(10);p.addView(b,lp);b.setOnClickListener(v->run.run());}
+ @Override public void onCreate(Bundle b){super.onCreate(b);audio=(AudioManager)getSystemService(AUDIO_SERVICE);pref=getSharedPreferences("finevolume",0);show();}
+ void show(){ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);root=new LinearLayout(this);root.setOrientation(1);root.setPadding(d(32),d(22),d(32),d(24));root.setBackgroundColor(0xff0c1423);scroll.addView(root);setContentView(scroll);
+ TextView title=txt("◖))   FineVolume",30,white);title.setTypeface(null,Typeface.BOLD);root.addView(title);root.addView(txt("Homatics · 音量控制中心  1.1",14,muted));gap(root,22);
+ LinearLayout main=panel("遥控器音量接管");state=txt("",16,muted);main.addView(state);gap(main,12);
+ Switch toggle=new Switch(this);toggle.setText("启用音量键接管");toggle.setTextColor(white);toggle.setTextSize(18);toggle.setChecked(pref.getBoolean("enabled",false));main.addView(toggle);toggle.setOnCheckedChangeListener((b,on)->{pref.edit().putBoolean("enabled",on).apply();if(on){try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}catch(Exception e){Toast.makeText(this,"无法打开无障碍设置",Toast.LENGTH_LONG).show();}}refresh();});
+ action(main,"打开无障碍服务设置（需要手动授权）",()->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+ LinearLayout vol=panel("当前系统媒体音量");volume=txt("",27,white);vol.addView(volume);gap(vol,10);SeekBar seek=new SeekBar(this);seek.setMax(audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));seek.setProgress(audio.getStreamVolume(AudioManager.STREAM_MUSIC));vol.addView(seek);seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}public void onProgressChanged(SeekBar s,int v,boolean user){if(user){audio.setStreamVolume(AudioManager.STREAM_MUSIC,v,0);refresh();}}});vol.addView(txt("当前使用系统真实音量档位；并非独立 100 级 DSP。",14,muted));
+ LinearLayout cec=panel("HDMI-CEC · 音频输出");cec.addView(txt("CEC 可能让遥控器直接控制电视或功放。普通应用不能直接切换系统 CEC 开关。",15,muted));action(cec,"打开 HDMI-CEC 设置",()->{try{startActivity(new Intent("android.settings.HDMI_CONTROL_SETTINGS"));}catch(Exception e){try{startActivity(new Intent(Settings.ACTION_SOUND_SETTINGS));}catch(Exception ignored){}}});
+ LinearLayout display=panel("显示设置");display.addView(txt("悬浮条位置与时长（尚未启用悬浮条）",15,muted));Spinner pos=new Spinner(this);String[] p={"右侧居中","左侧居中","顶部"};pos.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,p));pos.setSelection(pref.getInt("position",0));display.addView(pos);pos.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?> a){}public void onItemSelected(AdapterView<?> a,View v,int i,long id){pref.edit().putInt("position",i).apply();}});Spinner sec=new Spinner(this);String[] secs={"1 秒","2 秒","3 秒","5 秒"};sec.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,secs));sec.setSelection(pref.getInt("duration",1));display.addView(sec);sec.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?> a){}public void onItemSelected(AdapterView<?> a,View v,int i,long id){pref.edit().putInt("duration",i).apply();}});
+ root.addView(txt("接管依赖系统无障碍按键过滤权限；HDMI-CEC 可能优先接收按键。关闭开关即停止应用拦截。",14,muted));refresh();}
+ void refresh(){if(volume==null||state==null)return;int max=audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC),now=audio.getStreamVolume(AudioManager.STREAM_MUSIC);volume.setText(now+" / "+max+"  ·  "+(max==0?0:Math.round(now*100f/max))+"%");state.setText(pref.getBoolean("enabled",false)?"已请求接管 · 需开启无障碍授权":"已关闭 · 系统原生音量键");}
+ @Override protected void onResume(){super.onResume();if(state!=null)refresh();}
+ @Override public boolean onKeyDown(int k,KeyEvent e){if((k==KeyEvent.KEYCODE_VOLUME_UP||k==KeyEvent.KEYCODE_VOLUME_DOWN)&&pref.getBoolean("enabled",false)){if(e.getRepeatCount()==0)audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,k==KeyEvent.KEYCODE_VOLUME_UP?1:-1,0);refresh();return true;}return super.onKeyDown(k,e);}
 }
