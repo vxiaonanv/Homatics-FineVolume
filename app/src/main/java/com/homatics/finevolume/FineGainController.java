@@ -28,8 +28,7 @@ public final class FineGainController {
    // 100% is unity gain. Intermediate values use logarithmic mapping.
    float db=v==0?-96f:(float)(20.0*Math.log10(v/100.0));
    try{
-     int channels=effect.getChannelCount();
-     for(int ch=0;ch<channels;ch++)effect.setInputGainByChannelIndex(ch,db);
+     effect.setInputGainAllChannelsTo(db);
      percent=v;return true;
    }catch(Exception | LinkageError e){available=false;release();return false;}
  }
