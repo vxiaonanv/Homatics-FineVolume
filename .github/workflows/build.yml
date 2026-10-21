@@ -1,6 +1,8 @@
 name: Build Android APK
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 permissions:
   contents: read
 jobs:
@@ -36,6 +38,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Homatics-FineVolume-1.1-debug
+          name: Homatics-FineVolume-1.2-validation-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
