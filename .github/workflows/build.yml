@@ -37,7 +37,17 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Build debug APK
-        run: gradle --no-daemon --stacktrace --console=plain :app:assembleDebug
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace --console=plain :app:assembleDebug 2>&1 | tee build-validation.log
+      - name: Upload build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FineVolume-1.2-build-log
+          path: build-validation.log
+          if-no-files-found: warn
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
