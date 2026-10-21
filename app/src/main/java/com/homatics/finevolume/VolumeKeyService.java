@@ -46,10 +46,22 @@ public class VolumeKeyService extends AccessibilityService {
         prefs = getSharedPreferences("finevolume", MODE_PRIVATE);
         audio = (AudioManager) getSystemService(AUDIO_SERVICE);
         windows = (WindowManager) getSystemService(WINDOW_SERVICE);
-        gain = new FineGainController(this);
+        // Never initialize vendor DSP synchronously while Android is binding
+        // the accessibility service: unsupported global session effects can
+        // otherwise prevent the service from becoming usable.
         prefs.registerOnSharedPreferenceChangeListener(preferenceListener);
-        syncEnabledState();
-        prefs.edit().putBoolean("dsp_supported", gain.isAvailable()).apply();
+        prefs.edit().putBoolean("dsp_supported", false).apply();
+        handler.post(() -> {
+            if (prefs == null) return;
+            try {
+                gain = new FineGainController(this);
+                syncEnabledState();
+                prefs.edit().putBoolean("dsp_supported", gain.isAvailable()).apply();
+            } catch (Throwable error) {
+                android.util.Log.e("FineVolume", "DSP initialization failed", error);
+                prefs.edit().putBoolean("dsp_supported", false).apply();
+            }
+        });
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {}
